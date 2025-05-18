@@ -6,24 +6,6 @@
 
 A command-line interface (CLI) for managing Home Assistant sensor data, addressing gaps in the built-in data management capabilities of statistics data in the Recorder. This tool helps with data exploration, analysis, modification, and migration tasks that aren't available in the Home Assistant UI. 
 
-
-## ⚠️ IMPORTANT: Database Safety Warning
-
-**ALWAYS BACK UP YOUR HOME ASSISTANT DATABASE BEFORE MAKING MODIFICATIONS.**
-
-This tool can make permanent changes to your Home Assistant database. While it includes safety features like `--dry-run`, unintended modifications could affect your Home Assistant installation or cause data loss. It's strongly recommended to:
-
-1. Create a complete backup of your Home Assistant instance
-2. Work on a copy of your database when possible
-3. Use the `--dry-run` option to preview changes before applying them
-
-## 🔍 Actions available in the CLI
-
-- **Status**: Examine database structure, size, and record counts
-- **List**: List all entities with storage metrics and time ranges
-- **Export**: Export entity data with flexible filtering options
-- **Import**: Import and modify sensor data with safety features
-
 ## 📊 Use Cases
 
 - **Storage Analysis**: Find which sensors are using the most database space
@@ -34,7 +16,27 @@ This tool can make permanent changes to your Home Assistant database. While it i
 - **Missing Data Recovery**: Fix gaps in energy or sensor data by adding missing records
 - **External Visualization and Analysis**: Extract data for use with external tools (e.g. Excel)
 
-## 🚀 Installation
+
+## 🔍 Commands available in the CLI
+
+- **Status**: Examine database structure, size, and record counts
+- **List**: List all entities with storage metrics and time ranges
+- **Export**: Export entity data with flexible filtering options
+- **Import**: Import and modify sensor data with safety features
+
+
+## ⚠️ Database Safety Warning
+
+**ALWAYS BACK UP YOUR HOME ASSISTANT DATABASE BEFORE MAKING MODIFICATIONS.**
+
+This tool can make permanent changes to your Home Assistant database. While it includes safety features like `--dry-run`, unintended modifications could affect your Home Assistant installation or cause data loss. It's strongly recommended to:
+
+1. Create a complete backup of your Home Assistant instance
+2. Work on a copy of your database when possible
+3. Use the `--dry-run` option to preview changes before applying them
+
+
+## 🚀 Installation & Configuration
 
 ```bash
 # Clone the repository
@@ -48,8 +50,6 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 # Install dependencies
 pip install click sqlalchemy tabulate
 ```
-
-## 📝 Configuration
 
 By default, the tool looks for a Home Assistant database at `./home-assistant_v2.db`. You can specify a different database location using the `--db-url` option or by setting the `HA_DB_URL` environment variable:
 
@@ -152,7 +152,8 @@ Export format (also used for import):
 table,entity (ignored),date (ignored),id,created,created_ts,metadata_id,start,start_ts,mean,min,max,last_reset,last_reset_ts,state,sum,mean_weight
 statistics,sensor.helm_memory_available_swap,2024-01-03 11:00:00,7,,1704283210.3089955,7,,1704279600.0,3198.373888,3198.373888,3198.373888,,,,,
 statistics,sensor.helm_memory_available_swap,2024-01-03 12:00:00,23,,1704286810.3039548,7,,1704283200.0,3198.3738880000005,3198.373888,3198.373888,,,,,
-statistics,sensor.helm_memory_available_swap,2024-01-03 13:00:00,39,,1704290410.304482,7,,1704286800.0,3198.3738880000005,3198.373888,3198.373888,,,,,```
+statistics,sensor.helm_memory_available_swap,2024-01-03 13:00:00,39,,1704290410.304482,7,,1704286800.0,3198.3738880000005,3198.373888,3198.373888,,,,,
+```
 
 For import, only the fields you want to modify are required (mainly `table`, `id` for updates, plus values).
 
@@ -196,13 +197,15 @@ python cli_ha_statistics.py export sensor.temperature_living_room --above 30 --b
    python cli_ha_statistics.py export sensor.energy_consumption --after "2025-04-01" --before "2025-04-30" > energy.csv
    ```
 
-2. In Excel/spreadsheet software:
+2. Beware that, depending on the time range, your CSV file may contain entries for both `statistics` and `statistics_short_term` tables. You might want to ignore or remove data from the `statistics_short_term` if you're only interested in long-term statistics.
+
+3. In Excel/spreadsheet software:
    - Identify missing time periods
    - Add new rows without IDs (leave ID field empty)
    - Set appropriate timestamps and values
    - Save the CSV
 
-3. Preview and import the fixed data:
+4. Preview and import the fixed data:
    ```bash
    python cli_ha_statistics.py import energy.csv --dry-run
    python cli_ha_statistics.py import energy.csv
@@ -219,7 +222,7 @@ For example, when you replace a sensor but want to keep the history:
    ```
 
 2. In a text editor or spreadsheet, edit the `old_sensor.csv` file:
-   - Remove the rows you don't want to migrate to the new sensor
+   - Remove the rows you don't want to migrate to the new sensor. This might include all data from the `statistics_short_term` table.
    - Remove the ID column values (or set to empty) to create new records, leaving the data and dates untouched
    - Change the metadata_id of all entries of the old sensor to match that of the `new_sensor.csv`
 
