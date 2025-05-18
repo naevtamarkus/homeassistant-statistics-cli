@@ -1,8 +1,8 @@
 # Home Assistant Statistics Data CLI for the Recorder DB
 
-[![GitHub license](https://img.shields.io/github/license/yourusername/ha-data-cli)](https://github.com/yourusername/ha-data-cli/blob/main/LICENSE)
-[![GitHub issues](https://img.shields.io/github/issues/yourusername/ha-data-cli)](https://github.com/yourusername/ha-data-cli/issues)
-[![GitHub stars](https://img.shields.io/github/stars/yourusername/ha-data-cli)](https://github.com/yourusername/ha-data-cli/stargazers)
+[![GitHub license](https://img.shields.io/github/license/naevtamarkus/homeassistant-statistics-cli)](https://github.com/yourusername/ha-data-cli/blob/main/LICENSE)
+[![GitHub issues](https://img.shields.io/github/issues/naevtamarkus/homeassistant-statistics-cli)](https://github.com/yourusername/ha-data-cli/issues)
+[![GitHub stars](https://img.shields.io/github/stars/naevtamarkus/homeassistant-statistics-cli)](https://github.com/yourusername/ha-data-cli/stargazers)
 
 A command-line interface (CLI) for managing Home Assistant sensor data, addressing gaps in the built-in data management capabilities of statistics data in the Recorder. This tool helps with data exploration, analysis, modification, and migration tasks that aren't available in the Home Assistant UI. 
 
@@ -38,8 +38,8 @@ This tool can make permanent changes to your Home Assistant database. While it i
 
 ```bash
 # Clone the repository
-git clone https://github.com/naevtamarkus/cli_ha_statistics.git
-cd cli_ha_statistics
+git clone https://github.com/naevtamarkus/homeassistant-statistics-cli.git
+cd homeassistant-statistics-cli
 
 # Create and activate virtual environment
 python3 -m venv venv
