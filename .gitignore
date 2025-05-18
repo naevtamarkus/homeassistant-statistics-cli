@@ -1,0 +1,8 @@
+# Ignore everything
+*
+
+# But not these files...
+!.gitignore
+!README.md
+!cli_ha_statistics.py
+!LICENSE

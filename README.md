@@ -145,6 +145,106 @@ Options:
 
 The import function performs an "upsert" operation - it updates existing records or inserts new ones, and can delete records with matching IDs when appropriate fields are provided.
 
+## 📊 Example Use Cases
+
+### Finding sensors using the most storage
+
+```bash
+python cli_ha_statistics.py list --sort kb
+```
+
+### Find abnormal temperature readings
+
+```bash
+python cli_ha_statistics.py export sensor.temperature_living_room --above 30 --below 10 > abnormal_temps.csv
+```
+
+### Correcting wrong sensor readings
+
+1. Export the data you need to modify:
+   ```bash
+   python cli_ha_statistics.py export sensor.temperature_living_room --after "2025-05-01" > temp.csv
+   ```
+
+2. Edit the CSV file to correct values
+
+3. Preview changes without modifying the database:
+   ```bash
+   python cli_ha_statistics.py import temp.csv --dry-run
+   ```
+
+4. Apply the changes:
+   ```bash
+   python cli_ha_statistics.py import temp.csv
+   ```
+
+### Filling in missing energy data
+
+1. Export a time range containing the gap:
+   ```bash
+   python cli_ha_statistics.py export sensor.energy_consumption --after "2025-04-01" --before "2025-04-30" > energy.csv
+   ```
+
+2. Beware that, depending on the time range, your CSV file may contain entries for both `statistics` and `statistics_short_term` tables. You might want to ignore or remove data from the `statistics_short_term` if you're only interested in long-term statistics.
+
+3. In Excel/spreadsheet software:
+   - Identify missing time periods
+   - Add new rows without IDs (leave ID field empty)
+   - Set appropriate timestamps and values
+   - Save the CSV
+
+4. Preview and import the fixed data:
+   ```bash
+   python cli_ha_statistics.py import energy.csv --dry-run
+   python cli_ha_statistics.py import energy.csv
+   ```
+
+### Migrating data between sensors
+
+For example, when you replace a sensor but want to keep the history:
+
+1. Export data from both sensors:
+   ```bash
+   python cli_ha_statistics.py export sensor.old_temperature > old_sensor.csv
+   python cli_ha_statistics.py export sensor.new_temperature > new_sensor.csv
+   ```
+
+2. In a text editor or spreadsheet, edit the `old_sensor.csv` file:
+   - Remove the rows you don't want to migrate to the new sensor. This might include all data from the `statistics_short_term` table.
+   - Remove the ID column values (or set to empty) to create new records, leaving the data and dates untouched
+   - Change the metadata_id of all entries of the old sensor to match that of the `new_sensor.csv`
+
+3. Import the modified data:
+   ```bash
+   python cli_ha_statistics.py import old_sensor.csv --dry-run
+   python cli_ha_statistics.py import old_sensor.csv
+   ```
+
+### Offline modifications with SQL generation
+
+For safer modifications on a production system:
+
+1. Copy your Home Assistant database to a separate computer:
+   ```bash
+   scp homeassistant@homeassistant:/config/home-assistant_v2.db ./
+   ```
+
+2. Work locally and eventually run the import with dry-run to generate SQL statements:
+   ```bash
+   python cli_ha_statistics.py import fixes.csv --dry-run > sql_fixes.sql
+   ```
+
+3. Review the SQL statements for correctness
+
+4. Apply the SQL directly to your production database:
+   ```bash
+   # For SQLite
+   sqlite3 /path/to/home-assistant_v2.db < sql_fixes.sql
+   
+   # Or through Home Assistant's database shell
+   ha database execute < sql_fixes.sql
+   ```
+
 ## 📝 Understanding the Recorder DB and CSV Format
 
 For more details on the Home Assistant database schema, refer to the [official Home Assistant documentation](https://www.home-assistant.io/integrations/recorder/).
@@ -252,106 +352,6 @@ Different types of sensors typically use different fields:
   - Other fields might be empty or populated with the same value
 
 Understanding these fields helps you correctly modify data without introducing inconsistencies that might affect Home Assistant's functionality.
-
-## 📊 Example Use Cases
-
-### Finding sensors using the most storage
-
-```bash
-python cli_ha_statistics.py list --sort kb
-```
-
-### Find abnormal temperature readings
-
-```bash
-python cli_ha_statistics.py export sensor.temperature_living_room --above 30 --below 10 > abnormal_temps.csv
-```
-
-### Correcting wrong sensor readings
-
-1. Export the data you need to modify:
-   ```bash
-   python cli_ha_statistics.py export sensor.temperature_living_room --after "2025-05-01" > temp.csv
-   ```
-
-2. Edit the CSV file to correct values
-
-3. Preview changes without modifying the database:
-   ```bash
-   python cli_ha_statistics.py import temp.csv --dry-run
-   ```
-
-4. Apply the changes:
-   ```bash
-   python cli_ha_statistics.py import temp.csv
-   ```
-
-### Filling in missing energy data
-
-1. Export a time range containing the gap:
-   ```bash
-   python cli_ha_statistics.py export sensor.energy_consumption --after "2025-04-01" --before "2025-04-30" > energy.csv
-   ```
-
-2. Beware that, depending on the time range, your CSV file may contain entries for both `statistics` and `statistics_short_term` tables. You might want to ignore or remove data from the `statistics_short_term` if you're only interested in long-term statistics.
-
-3. In Excel/spreadsheet software:
-   - Identify missing time periods
-   - Add new rows without IDs (leave ID field empty)
-   - Set appropriate timestamps and values
-   - Save the CSV
-
-4. Preview and import the fixed data:
-   ```bash
-   python cli_ha_statistics.py import energy.csv --dry-run
-   python cli_ha_statistics.py import energy.csv
-   ```
-
-### Migrating data between sensors
-
-For example, when you replace a sensor but want to keep the history:
-
-1. Export data from both sensors:
-   ```bash
-   python cli_ha_statistics.py export sensor.old_temperature > old_sensor.csv
-   python cli_ha_statistics.py export sensor.new_temperature > new_sensor.csv
-   ```
-
-2. In a text editor or spreadsheet, edit the `old_sensor.csv` file:
-   - Remove the rows you don't want to migrate to the new sensor. This might include all data from the `statistics_short_term` table.
-   - Remove the ID column values (or set to empty) to create new records, leaving the data and dates untouched
-   - Change the metadata_id of all entries of the old sensor to match that of the `new_sensor.csv`
-
-3. Import the modified data:
-   ```bash
-   python cli_ha_statistics.py import old_sensor.csv --dry-run
-   python cli_ha_statistics.py import old_sensor.csv
-   ```
-
-### Offline modifications with SQL generation
-
-For safer modifications on a production system:
-
-1. Copy your Home Assistant database to a separate computer:
-   ```bash
-   scp homeassistant@homeassistant:/config/home-assistant_v2.db ./
-   ```
-
-2. Work locally and eventually run the import with dry-run to generate SQL statements:
-   ```bash
-   python cli_ha_statistics.py import fixes.csv --dry-run > sql_fixes.sql
-   ```
-
-3. Review the SQL statements for correctness
-
-4. Apply the SQL directly to your production database:
-   ```bash
-   # For SQLite
-   sqlite3 /path/to/home-assistant_v2.db < sql_fixes.sql
-   
-   # Or through Home Assistant's database shell
-   ha database execute < sql_fixes.sql
-   ```
 
 ## 🤝 Contributing
 
