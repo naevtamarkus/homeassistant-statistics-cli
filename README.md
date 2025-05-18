@@ -145,17 +145,113 @@ Options:
 
 The import function performs an "upsert" operation - it updates existing records or inserts new ones, and can delete records with matching IDs when appropriate fields are provided.
 
-## 📝 CSV Format
+## 📝 Understanding the Recorder DB and CSV Format
 
-Export format (also used for import):
+For more details on the Home Assistant database schema, refer to the [official Home Assistant documentation](https://www.home-assistant.io/integrations/recorder/).
+
+Home Assistant's database structure is key to effectively using this tool. The statistics-related tables store all sensor measurements for historical data and long-term trends.
+
+Home Assistant might change the DB format from time to time. This documentation and the CLI itself is aware of the schema of the DB up to a certain number. If the schema changed in the meantime, a warning message will be displayed.
+
+### Database Structure
+
+The statistics data is primarily stored in three tables:
+
+1. **statistics_meta**: Contains metadata about each entity
+   - `id`: The primary key (metadata_id used in other tables)
+   - `statistic_id`: The entity ID (e.g., `sensor.temperature_living_room`)
+   - `unit_of_measurement`: The unit used for readings (e.g., °C, kWh)
+   - `source`: The source of the statistics (usually "recorder")
+
+2. **statistics**: Contains hourly aggregated data for long-term storage
+   - `id`: The primary key for each record
+   - `metadata_id`: References the entity in statistics_meta
+   - `start_ts`: Unix timestamp for the start of the measurement period
+   - `created_ts`: When the record was created
+   - `mean`, `min`, `max`: Statistical values for the period
+   - `sum`: Cumulative value (commonly used for energy, water consumption)
+   - `state`: Last known state value
+   - Other fields related to measurement characteristics
+
+3. **statistics_short_term**: Contains 5-minute aggregated data for recent history
+   - Same structure as the statistics table
+   - Data typically gets purged after a configurable retention period
+
+### Timestamps Explained
+
+The database uses Unix timestamps (seconds since January 1, 1970):
+- `start_ts`: Beginning of the measurement period
+- `created_ts`: When the record was created (often slightly later than start_ts)
+- `last_reset_ts`: For accumulating sensors (like energy), when the counter was last reset
+
+When exporting data to CSV format, these timestamps are converted to human-readable dates in the format `YYYY-MM-DD HH:MM:SS`, and stored in the third column `date`. This field is provided only for human convenience and is ignored in the import process.
+
+### CSV Format Details
+
+When you export data, each row contains:
+
 ```
-table,entity (ignored),date (ignored),id,created,created_ts,metadata_id,start,start_ts,mean,min,max,last_reset,last_reset_ts,state,sum,mean_weight
-statistics,sensor.helm_memory_available_swap,2024-01-03 11:00:00,7,,1704283210.3089955,7,,1704279600.0,3198.373888,3198.373888,3198.373888,,,,,
-statistics,sensor.helm_memory_available_swap,2024-01-03 12:00:00,23,,1704286810.3039548,7,,1704283200.0,3198.3738880000005,3198.373888,3198.373888,,,,,
-statistics,sensor.helm_memory_available_swap,2024-01-03 13:00:00,39,,1704290410.304482,7,,1704286800.0,3198.3738880000005,3198.373888,3198.373888,,,,,
+table,entity,date,id,metadata_id,created_ts,start_ts,mean,min,max,last_reset,last_reset_ts,state,sum
+statistics,sensor.temperature_living_room,2025-05-17 12:00:00,1240825,342,1747238410.2970626,1747234800.0,21.5,21.0,22.0,,,,
+[...]
 ```
 
-For import, only the fields you want to modify are required (mainly `table`, `id` for updates, plus values).
+Field definitions:
+- `table`: Which table the record belongs to (`statistics` or `statistics_short_term`).
+- `entity`: The entity ID (for information only, not used during import)
+- `date`: Human-readable version of start_ts (for information only, not used during import)
+- `id`: Database primary key (required for updates and deletes)
+- `metadata_id`: References the entity definition in statistics_meta. This field is always required
+- `created_ts`: When the record was created (Unix timestamp)
+- `start_ts`: Start of the measurement period (Unix timestamp).
+- `mean`: Average value during the period
+- `min`: Minimum value during the period
+- `max`: Maximum value during the period
+- `last_reset`: Value at the last counter reset (for accumulating sensors)
+- `last_reset_ts`: When the counter was last reset
+- `state`: Last known state
+- `sum`: Cumulative value (for accumulating sensors)
+
+### Import Fields Requirements
+
+When importing data:
+
+1. **For updates** (modifying existing records):
+   - `table`: Required to identify which table to update
+   - `id`: Required to identify which record to update
+   - Value fields you want to modify (`mean`, `min`, `max`, `state`, `sum`, etc.)
+
+2. **For inserts** (adding new records):
+   - `table`: Required
+   - `metadata_id`: Required to identify which entity the data belongs to
+   - `start_ts`: Required to specify when the measurement occurred
+   - `created_ts`: Typically set to the same value as start_ts if not specified
+   - Value fields for the new record
+
+3. **For deletes** (removing records):
+   - `table`: Required
+   - `id`: Required to identify which record to delete
+   - No value fields should be included
+
+### Common Field Values by Sensor Type
+
+Different types of sensors typically use different fields:
+
+- **Regular sensors** (temperature, humidity, etc.):
+  - Use `mean`, `min`, and `max` fields
+  - `state` is sometimes populated
+  - `sum` is usually empty
+
+- **Accumulating sensors** (energy, water, etc.):
+  - Use `sum` as the primary value
+  - May have `last_reset` and `last_reset_ts` populated
+  - `mean`, `min`, `max` might all be the same value
+
+- **State sensors** (switches, modes):
+  - Use `state` field
+  - Other fields might be empty or populated with the same value
+
+Understanding these fields helps you correctly modify data without introducing inconsistencies that might affect Home Assistant's functionality.
 
 ## 📊 Example Use Cases
 
