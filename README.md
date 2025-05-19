@@ -105,10 +105,10 @@ Options:
 
 Example output:
 ```
-Entity                           Count  First               Last                ~ KB  Unit
-sensor.temperature_living_room   86400  2025-01-01 00:00:00 2025-05-17 12:30:00 775.2 °C
-sensor.humidity_bathroom         84960  2025-01-01 00:00:00 2025-05-17 12:30:00 764.6 %
-sensor.power_consumption         43200  2025-03-01 00:00:00 2025-05-17 12:30:00 388.8 W
+ID  Entity                           Count  First               Last                ~ KB  Unit
+2   sensor.temperature_living_room   86400  2025-01-01 00:00:00 2025-05-17 12:30:00 775.2 °C
+3   sensor.humidity_bathroom         84960  2025-01-01 00:00:00 2025-05-17 12:30:00 764.6 %
+7   sensor.power_consumption         43200  2025-03-01 00:00:00 2025-05-17 12:30:00 388.8 W
 ...
 ```
 
@@ -201,18 +201,16 @@ python cli_ha_statistics.py export sensor.temperature_living_room --above 30 --b
 
 ### Migrating data between sensors
 
-For example, when you replace a sensor but want to keep the history:
+For example, when you replace a sensor with another and want to move the history from the old sensor into the new one:
 
-1. Export data from both sensors:
+1. Export data from the old sensor:
    ```bash
    python cli_ha_statistics.py export sensor.old_temperature > old_sensor.csv
-   python cli_ha_statistics.py export sensor.new_temperature > new_sensor.csv
    ```
 
 2. In a text editor or spreadsheet, edit the `old_sensor.csv` file:
    - Remove the rows you don't want to migrate to the new sensor. This might include all data from the `statistics_short_term` table.
-   - Remove the ID column values (or set to empty) to create new records, leaving the data and dates untouched
-   - Change the metadata_id of all entries of the old sensor to match that of the `new_sensor.csv`
+   - Change the metadata_id of all entries of the old sensor to match that of the new sensor. You can see the ID of the new sensor with the `list` command.
 
 3. Import the modified data:
    ```bash
@@ -238,9 +236,15 @@ For safer modifications on a production system:
 
 4. Apply the SQL directly to your production database:
    ```bash
-   # For SQLite
+   # For SQLite, if the file has less than 1000 transactions:
    sqlite3 /path/to/home-assistant_v2.db < sql_fixes.sql
-   
+
+   # If the file has more than 1000 transactions, avoid DB locking issues by splitting it first:
+   split -l 1000 sql_fixes.sql sql_
+   sqlite3 /path/to/home-assistant_v2.db < sql_1; sleep 3;
+   sqlite3 /path/to/home-assistant_v2.db < sql_2; sleep 3;
+   ...
+
    # Or through Home Assistant's database shell
    ha database execute < sql_fixes.sql
    ```
