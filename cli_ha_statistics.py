@@ -133,7 +133,7 @@ def status(ctx):
 
 
 @cli.command()
-@click.option('--sort', type=click.Choice(['count', 'first', 'last', 'kb']), default=None,
+@click.option('--sort', type=click.Choice(['count', 'first', 'last', 'kb', 'meta_id']), default=None,
               help='Sort results by this column')
 @click.option('--reverse', is_flag=True, help='Reverse sort order')
 @click.option('--csv', 'csv_mode', is_flag=True, help='Output in CSV format')
@@ -141,7 +141,7 @@ def status(ctx):
 @click.option('--before', type=click.DateTime(), help='Only consider data before this date')
 @click.pass_context
 def list(ctx, sort, reverse, csv_mode, after, before):
-    """List entities with count, first/last seen, KB, unit."""
+    """List entities with count, first/last seen, KB, unit, and Meta ID."""
     engine = ctx.obj['ENGINE']
     meta = ctx.obj['META']
     
@@ -214,6 +214,7 @@ def list(ctx, sort, reverse, csv_mode, after, before):
             
             # Add to results
             results.append({
+                'id': mid,
                 'entity': eid,
                 'count': cnt,
                 'first': formatted_first,
@@ -227,22 +228,21 @@ def list(ctx, sort, reverse, csv_mode, after, before):
         results.sort(key=lambda x: x[sort], reverse=reverse)
     
     # Prepare output
-    headers = ['Entity', 'Count', 'First', 'Last', '~ KB', 'Unit']
+    headers = ['ID', 'Entity', 'Count', 'First', 'Last', '~ KB', 'Unit']
     
     if csv_mode:
         # CSV output
         w = csv.writer(sys.stdout)
         w.writerow(headers)
         for e in results: 
-            w.writerow([e[h.lower()] for h in headers])
+            w.writerow([e['id'], e['entity'], e['count'], e['first'], e['last'], e['kb'], e['unit']])
     else:
         # Table output
         table_out = [
-            [e['entity'], e['count'], e['first'], e['last'], e['kb'], e['unit']] 
+            [e['id'], e['entity'], e['count'], e['first'], e['last'], e['kb'], e['unit']] 
             for e in results
         ]
         click.echo(tabulate(table_out, headers=headers, tablefmt='plain'))
-
 
 @cli.command()
 @click.argument('entities', nargs=-1)
@@ -337,8 +337,8 @@ def import_cmd(ctx, csv_file, dry_run):
     operations = []
 
     if dry_run:
-        click.echo("=== DRY RUN MODE: SQL commands that would be executed ===")
-        click.echo("=" * 75)
+        click.echo("=== DRY RUN MODE: SQL commands that would be executed ===", err=True)
+        click.echo("=" * 75, err=True)
 
     try:
         # Read CSV rows and validate column count
@@ -348,18 +348,18 @@ def import_cmd(ctx, csv_file, dry_run):
         rows = []
         for idx, row in enumerate(reader, start=2):
             if len(row) != expected:
-                click.echo(f"CSV structure error at line {idx}: expected {expected} columns, got {len(row)}")
+                click.echo(f"CSV structure error at line {idx}: expected {expected} columns, got {len(row)}", err=True)
                 return
             rows.append(row)
     except Exception as e:
-        click.echo(f"Error reading CSV file: {e}")
+        click.echo(f"Error reading CSV file: {e}", err=True)
         return
 
     for row in rows:
         try:
             tbl_name = row.get('table')
             if tbl_name not in tables:
-                click.echo(f"Skipping row with invalid table: {tbl_name}")
+                click.echo(f"Skipping row with invalid table: {tbl_name}", err=True)
                 continue
             tbl = tables[tbl_name]
             data = {}
@@ -370,9 +370,10 @@ def import_cmd(ctx, csv_file, dry_run):
                 try:
                     data[col] = int(val) if col in ('id', 'metadata_id') else float(val)
                 except ValueError:
-                    click.echo(f"Warning: Could not convert {col}={val}, skipping")
+                    click.echo(f"Warning: Could not convert {col}={val}, skipping", err=True)
             record_id = data.get('id')
-            metadata_cols = {'id','table','entity','date','metadata_id','created_ts','start_ts'}
+            # We consider metadata_id as a special case of data column
+            metadata_cols = {'id','table','entity','date','created_ts','start_ts'}
             data_cols = set(data.keys()) - metadata_cols
 
             # Delete operation
@@ -383,7 +384,7 @@ def import_cmd(ctx, csv_file, dry_run):
             # Insert operation
             if not record_id:
                 if 'metadata_id' not in data or 'start_ts' not in data:
-                    click.echo("Warning: missing metadata_id or start_ts for insert, skipping")
+                    click.echo("Warning: missing metadata_id or start_ts for insert, skipping", err=True)
                     continue
                 data.setdefault('created_ts', data['start_ts'])
                 cols_str = ', '.join(data.keys())
@@ -392,14 +393,15 @@ def import_cmd(ctx, csv_file, dry_run):
                 changes['insert'] += 1
                 continue
             # Update operation
+            # This connects to the database to check if the record exists
+            # and to fetch the current values for comparison
             if record_id and data_cols:
                 with engine.connect() as conn:
                     cur = conn.execute(select(tbl).where(tbl.c.id == record_id)).fetchone()
                 if not cur:
-                    cols_str = ', '.join(data.keys())
-                    vals_str = ', '.join(str(v) if isinstance(v, int) else f"{v:.6f}" for v in data.values())
-                    operations.append(f"INSERT INTO {tbl_name} ({cols_str}) VALUES ({vals_str});")
-                    changes['insert'] += 1
+                    click.echo(f"Warning: Cannot update non-existent row with id={record_id} in table {tbl_name}, skipping", err=True)
+                    changes['skip'] += 1
+                    continue
                 else:
                     set_parts = []
                     for col in data_cols:
@@ -414,14 +416,14 @@ def import_cmd(ctx, csv_file, dry_run):
                     else:
                         changes['skip'] += 1
         except Exception as e:
-            click.echo(f"Error processing row: {e}")
+            click.echo(f"Error processing row: {e}", err=True)
 
     if dry_run:
-        click.echo(f"Operations summary: {changes['insert']} inserts, {changes['update']} updates, {changes['delete']} deletes, {changes['skip']} skips")
-        click.echo("SQL to execute:")
+        click.echo(f"Operations summary: {changes['insert']} inserts, {changes['update']} updates, {changes['delete']} deletes, {changes['skip']} skips", err=True)
+        click.echo("SQL to execute:", err=True)
         for op in operations:
             click.echo(op)
-        click.echo("Dry run complete, no changes applied.")
+        click.echo("Dry run complete, no changes applied.", err=True)
         return
 
     # Execute SQL operations
