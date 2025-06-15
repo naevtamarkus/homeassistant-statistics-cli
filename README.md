@@ -12,7 +12,7 @@ A command-line interface (CLI) for managing Home Assistant sensor data, addressi
 - **Data Cleanup**: Remove or modify incorrect sensor readings
 - **Data Migration**: Export data from one sensor and import to another or merge data between instances
 - **Value Filtering**: Find readings outside normal ranges
-- **Offline Modifications**: Copy database to a PC, modify data safely, and apply changes with SQL
+- **Offline Modifications**: Copy database to a PC, modify data safely, and apply changes without typing SQL
 - **Missing Data Recovery**: Fix gaps in energy or sensor data by adding missing records
 - **External Visualization and Analysis**: Extract data for use with external tools (e.g. Excel)
 
